@@ -4,6 +4,7 @@ import requests as rq
 import json
 import base64
 import re
+import platform
 
 from datetime import datetime
 from datetime import date as dte
@@ -375,16 +376,13 @@ class htmltxt():
 
 	def openWebPage(self, name, soup):
 		self.writeHtml(name, soup)
-
-		""" Linux
-		path = subprocess.check_output("pwd", shell=True).decode('UTF-8')
-		cmd = "xdg-open " + path[0:len(path)-1] + "/" + name + ".html &"
-		os.system(cmd)
-		#"""
-		#""" Windows
-		path = subprocess.check_output("echo %%cd%%", shell=True).decode('UTF-8')[1:-3]
-		os.system("explorer \"file://"+path+"\\"+name+".html\"")
-		#"""
+		if platform.system() == "Windows":
+			path = subprocess.check_output("echo %%cd%%", shell=True).decode('UTF-8')[1:-3]
+			os.system("explorer \"file://"+path+"\\"+name+".html\"")
+		else: 
+			path = subprocess.check_output("pwd", shell=True).decode('UTF-8')
+			cmd = "xdg-open " + path[0:len(path)-1] + "/" + name + ".html &"
+			os.system(cmd)
 
 	def dateEditor(self):
 		date = datetime.strptime(self.date, "%Y-%m-%d").date()
