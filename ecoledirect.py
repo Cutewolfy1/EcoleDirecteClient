@@ -1,12 +1,24 @@
-# Start (End: 26)
+from classes import catch, htmltxt, config
+import sys
 
-from classes import catch, htmltxt
+configArgs = ["c", "config"]
 
 def main():
-	result = catch()
+	if len(sys.argv) >= 2:
+		if sys.argv[1] in configArgs:
+			config.setIds(input("id: "), input("mdp: "))
+			return
 
-	# result.login("", "")
-	result.login(input("id : "), input("mdp : "))
+	result = catch()
+	
+	code = result.login()
+
+	if code[0] != 200:
+		print("code: " + str(code[0]))
+		print("message: " + code[1])
+		print("Identifiant ou mot de passe invalide, \n reconfigurez les maintenant ou en rajoutant l'option \"config\" à la fin de la ligne de commande.")
+		config.setIds(input("id: "), input("mdp: "))
+		return
 
 	result.notes()
 	result.devoirs()
@@ -25,5 +37,3 @@ def main():
 	html.openWebPage(name, a)
 
 main()
-
-# End

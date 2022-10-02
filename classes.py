@@ -1,21 +1,42 @@
-# Start (End: 443)
-
-import requests as rq
-import json
 import base64
-import re
-import platform
-
-from datetime import datetime
-from datetime import date as dte
-import html
-
-import os
-import subprocess
 from bs4 import BeautifulSoup
+from datetime import date as dte
+from datetime import datetime
+import html
+import json
+import os
+import platform
+import re
+import requests as rq
+from simple_term_menu import TerminalMenu
+import subprocess
 
-# constants
-soup = "html"
+class config():
+	def getIds():
+		with open("ids.png", encoding="utf8") as fp:
+			ids = BeautifulSoup(fp, 'html.parser')
+		id_ = ids.find(id="id").string
+		mdp = ids.find(id="mdp").string
+		if id_ == None:
+			id_ = input("id: ")
+		else:
+			id_ = base64.b64decode(id_).decode("utf-8", "ignore")
+		if mdp == None:
+			mdp = input("mdp: ")
+		else:
+			mdp = base64.b64decode(mdp).decode("utf-8", "ignore")
+		return [id_, mdp]
+
+	def setIds(id_, mdp):
+		with open("ids.png", encoding="utf8") as fp:
+			ids = BeautifulSoup(fp, 'html.parser')
+		ids.find(id="id").clear()
+		ids.find(id="id").insert(0, base64.b64encode(id_.encode("utf-8")).decode("utf-8"))
+		ids.find(id="mdp").clear()
+		ids.find(id="mdp").insert(0, base64.b64encode(mdp.encode("utf-8")).decode("utf-8"))
+		f = open("ids.png", "w", encoding="utf8")
+		f.write(str(ids))
+		f.close()
 
 class catch():
 	def __init__(self):
@@ -25,14 +46,21 @@ class catch():
 		self.devoirsJson = "devoirs"
 		self.messagesJson = "messages"
 		self.planningJson = "emploi du temps"
+		myid, pwd = config.getIds()
+		self.myid = myid
+		self.pwd = pwd
 
-	def login(self, myid, pwd):
-		data = 'data={"identifiant": "' + myid + '","motdepasse": "' + pwd + '"}'
+	def login(self):
+		data = 'data={"identifiant": "' + self.myid + '","motdepasse": "' + self.pwd + '"}'
 		url = 'https://api.ecoledirecte.com/v3/login.awp?v=4.18.3'
 		login = post(url, data)
+		if login["code"] != 200:
+			return [login["code"], login["message"]]
 		self.name = login["data"]["accounts"][0]["prenom"] + " " + login["data"]["accounts"][0]["nom"]
 		setId(self, login)
 		setToken(self, login)
+		config.setIds(self.myid, self.pwd)
+		return [login["code"], login["message"]]
 
 	def notes(self):
 		url = 'https://api.ecoledirecte.com/v3/eleves/'+self.id+'/notes.awp?v=4.18.3&verbe=get&'
@@ -164,6 +192,7 @@ class htmltxt():
 			self.devoirsHtml = "devoirs"
 			self.messagesHtml = "messages"
 			self.planningHtml = "emploi du temps"
+		soup = ""
 		
 	def createNotes(self, notesJson):
 		if self.TXT:
@@ -406,5 +435,3 @@ class htmltxt():
 			dateString += months[date.month] + str(date.year)
 
 		return dateString
-
-# End 442 (443)
