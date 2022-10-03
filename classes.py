@@ -8,16 +8,17 @@ import os
 import platform
 import re
 import requests as rq
-from simple_term_menu import TerminalMenu
 import subprocess
 
 class config():
+	file = "ids.html" # filename of saved ids
+
 	def getIds():
-		with open("ids.png", encoding="utf8") as fp:
-			ids = BeautifulSoup(fp, 'html.parser')
-		id_ = ids.find(id="id").string
+		with open(config.file, encoding="utf8") as fp:
+			ids = BeautifulSoup(fp, 'html.parser') # opening file
+		id_ = ids.find(id="id").string # extract string from html
 		mdp = ids.find(id="mdp").string
-		if id_ == None:
+		if id_ == None: # checking if empty asking; else decode actual saved id
 			id_ = input("id: ")
 		else:
 			id_ = base64.b64decode(id_).decode("utf-8", "ignore")
@@ -28,83 +29,77 @@ class config():
 		return [id_, mdp]
 
 	def setIds(id_, mdp):
-		with open("ids.png", encoding="utf8") as fp:
-			ids = BeautifulSoup(fp, 'html.parser')
-		ids.find(id="id").clear()
-		ids.find(id="id").insert(0, base64.b64encode(id_.encode("utf-8")).decode("utf-8"))
+		with open(config.file, encoding="utf8") as fp:
+			ids = BeautifulSoup(fp, 'html.parser') # opening file
+		ids.find(id="id").clear() # clearing tags
+		ids.find(id="id").insert(0, base64.b64encode(id_.encode("utf-8")).decode("utf-8")) # inserting encoded string in base64
 		ids.find(id="mdp").clear()
 		ids.find(id="mdp").insert(0, base64.b64encode(mdp.encode("utf-8")).decode("utf-8"))
-		f = open("ids.png", "w", encoding="utf8")
-		f.write(str(ids))
+		f = open(config.file, "w", encoding="utf8")
+		f.write(str(ids)) # writing to output file
 		f.close()
 
 class catch():
 	def __init__(self):
-		self.name = "Lorem Ipsum"
-		self.token = ["token", "tokenData"]
-		self.notesJson = "notes"
-		self.devoirsJson = "devoirs"
-		self.messagesJson = "messages"
-		self.planningJson = "emploi du temps"
-		myid, pwd = config.getIds()
-		self.myid = myid
-		self.pwd = pwd
+		self.devoirsJson, self.messagesJson, self.name, self.notesJson, self.planningJson = 5*[""] # setting to empty string
+		self.token = ["", ""]
+		self.myid, self.pwd = config.getIds() # getting ids to connect
 
-	def login(self):
-		data = 'data={"identifiant": "' + self.myid + '","motdepasse": "' + self.pwd + '"}'
+	def login(self): # login into ecoledirecte API
+		data = 'data={{"identifiant": "{}","motdepasse": "{}"}}'.format(self.myid, self.pwd)
 		url = 'https://api.ecoledirecte.com/v3/login.awp?v=4.18.3'
-		login = post(url, data)
-		if login["code"] != 200:
+		login = post(url, data) # sending url
+		if login["code"] != 200: # catching connection error
 			return [login["code"], login["message"]]
-		self.name = login["data"]["accounts"][0]["prenom"] + " " + login["data"]["accounts"][0]["nom"]
-		setId(self, login)
-		setToken(self, login)
-		config.setIds(self.myid, self.pwd)
+		self.name = login["data"]["accounts"][0]["prenom"] + " " + login["data"]["accounts"][0]["nom"] # setting first name and surname
+		setId(self, login) # setting ecoledirecte id to asking next files
+		setToken(self, login) # setting token for same
+		config.setIds(self.myid, self.pwd) # setting ids for next connections
 		return [login["code"], login["message"]]
 
-	def notes(self):
+	def notes(self): # fetching notes
 		url = 'https://api.ecoledirecte.com/v3/eleves/'+self.id+'/notes.awp?v=4.18.3&verbe=get&'
 		data = self.token[1]
 		notesJs = post(url, data)
 		setToken(self, notesJs)
-		self.notesJson = notesJs["data"]["periodes"][0]
+		self.notesJson = notesJs["data"]["periodes"][0] # storing notes into the object
 
-	def devoirs(self):
+	def devoirs(self): # fetching homeworks 
 		url = 'https://api.ecoledirecte.com/v3/Eleves/'+self.id+'/cahierdetexte.awp?v=4.18.3&verbe=get&'
 		data = self.token[1]
-		dates_json = post(url, data)
-		dates = list(dates_json['data'].keys())
+		dates_json = post(url, data) # posting request
+		dates = list(dates_json['data'].keys()) # getting all dates where are homeworks
 		setToken(self, dates_json)
 		devoirs = {}
-		for date in dates:
+		for date in dates: # getting one by one homework
 			url = 'https://api.ecoledirecte.com/v3/Eleves/'+self.id+'/cahierdetexte/' + date + '.awp?v=4.18.3&verbe=get&'
 			data = self.token[1]
 			homework_json = post(url, data)
 			setToken(self, homework_json)
-			matieres = homework_json['data']['matieres']
+			matieres = homework_json['data']['matieres'] # getting subjects of the date
 			devoirs[date] = {}
-			for homework in matieres:
+			for homework in matieres: # getting all homeworks
 				if "aFaire" in homework:
-					homeworkText = homework['aFaire']['contenu']
-					homeworkText = html.unescape(base64.b64decode(homeworkText).decode("utf-8", "ignore"))
-					homeworkText = re.sub('<[^<]+?>', '', homeworkText)
-					devoirs[date][homework["matiere"].lower()] = homeworkText
+					homeworkText = homework['aFaire']['contenu'] # getting base64 encoded content of the homework
+					homeworkText = html.unescape(base64.b64decode(homeworkText).decode("utf-8", "ignore")) # decoding
+					homeworkText = re.sub('<[^<]+?>', '', homeworkText) # deleting html tags
+					devoirs[date][homework["matiere"].lower()] = homeworkText # storing the homework in a big dictionnary
 		self.devoirsJson = devoirs
 
-	def messages(self):
+	def messages(self): # fetching messages
 		url = "https://api.ecoledirecte.com/v3/eleves/"+self.id+"/messages.awp?v=4.18.3&verbe=getall&typeCours=received&orerBy=date&order=desc&page=0&itemsPerPage=20&onlyRead=&query=&idClasseur=0"
 		data = self.token[1]
 		msgJson = post(url, data)
 		setToken(self, msgJson)
-		if msgJson["data"]["pagination"]["messagesRecusNotReadCount"] != 0:
+		if msgJson["data"]["pagination"]["messagesRecusNotReadCount"] != 0: # checking if there unread messages
 			messages = msgJson["data"]["messages"]["received"]
 			idsMsg = []
-			for message in messages:
-				if not message["read"]:
+			for message in messages: # getting ids of messages...
+				if not message["read"]: # ...if they are not read
 					idsMsg.append(str(message["id"]))
 
 			contenuMsg = []
-			for idMsg in idsMsg:
+			for idMsg in idsMsg: # fetching unread messages
 				url = "https://api.ecoledirecte.com/v3/eleves/"+self.id+"/messages/" + idMsg + ".awp?v=4.18.3&verbe=get&mode=destinataire"
 				data = self.token[1]
 				contenuMsg.append(post(url, data))
@@ -173,8 +168,14 @@ def setToken(self, token):
 	self.token[0] = token
 	self.token[1] = 'data={"token": "' + token + '"}'
 
+def getToken(self, index):
+	return self.token[index]
+
 def setId(self, loginData):
 	self.id = str(loginData["data"]["accounts"][0]["id"])
+
+def getId(self):
+	return self.id
 
 def post(url, data):
 	return json.loads(rq.post(url, data=data, headers={"user-agent":"a"}).text)
@@ -424,7 +425,7 @@ class htmltxt():
 		
 		if diff < 8:
 			if diff == 0:
-				dateString = "aujourd'hui"
+				dateString = "aujourd'hui"s
 			elif diff == 1:
 				dateString = "demain"
 			else :
